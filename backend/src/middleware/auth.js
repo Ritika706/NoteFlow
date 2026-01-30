@@ -17,4 +17,18 @@ function authRequired(req, res, next) {
   }
 }
 
-module.exports = { authRequired };
+function authOptional(req, res, next) {
+  const header = req.headers.authorization;
+  const token = header?.startsWith('Bearer ') ? header.slice('Bearer '.length) : null;
+  if (!token) return next();
+
+  try {
+    const payload = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = { id: payload.sub, email: payload.email };
+  } catch (err) {
+    // ignore invalid token for public routes
+  }
+  return next();
+}
+
+module.exports = { authRequired, authOptional };

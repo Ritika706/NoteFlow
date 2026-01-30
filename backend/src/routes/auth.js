@@ -1,5 +1,6 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const { User } = require('../models/User');
 
@@ -49,6 +50,120 @@ router.post('/login', async (req, res) => {
   );
 
   return res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
+});
+
+function generateOtp() {
+  const n = crypto.randomInt(0, 1000000);
+  return String(n).padStart(6, '0');
+}
+
+async function sendResetOtpEmail({ to, name, otp }) {
+  const host = process.env.SMTP_HOST;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
+  const from = process.env.SMTP_FROM;
+  const port = Number(process.env.SMTP_PORT || 587);
+
+  if (!host || !user || !pass || !from) return false;
+
+  // Lazy-load to keep deps optional in dev.
+  // eslint-disable-next-line global-require
+  const nodemailer = require('nodemailer');
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure: port === 465,
+    auth: { user, pass },
+  });
+
+  await transporter.sendMail({
+    from,
+    to,
+    subject: 'NoteFlow password reset OTP',
+    text: `Hi ${name || 'there'},\n\nYour NoteFlow password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you did not request this, you can ignore this email.`,
+  });
+
+  return true;
+}
+
+// Forgot password - request OTP
+router.post('/forgot-password/request', async (req, res) => {
+  const { email } = req.body || {};
+  if (!email) return res.status(400).json({ message: 'email is required' });
+
+  const normalizedEmail = String(email).toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+
+  // Always return success to avoid account enumeration
+  if (!user) {
+    return res.json({ message: 'If an account exists, an OTP has been sent.' });
+  }
+
+  const otp = generateOtp();
+  const otpHash = await bcrypt.hash(otp, 10);
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+  user.resetOtpHash = otpHash;
+  user.resetOtpExpiresAt = expiresAt;
+  user.resetOtpRequestedAt = new Date();
+  user.resetOtpAttempts = 0;
+  await user.save();
+
+  let emailed = false;
+  try {
+    emailed = await sendResetOtpEmail({ to: user.email, name: user.name, otp });
+  } catch (e) {
+    emailed = false;
+  }
+
+  if (!emailed) {
+    console.log(`🔐 Password reset OTP for ${user.email}: ${otp} (expires ${expiresAt.toISOString()})`);
+  }
+
+  return res.json({ message: 'If an account exists, an OTP has been sent.' });
+});
+
+// Forgot password - verify OTP + set new password
+router.post('/forgot-password/reset', async (req, res) => {
+  const { email, otp, newPassword } = req.body || {};
+  if (!email || !otp || !newPassword) {
+    return res.status(400).json({ message: 'email, otp, newPassword are required' });
+  }
+
+  const normalizedEmail = String(email).toLowerCase();
+  const user = await User.findOne({ email: normalizedEmail });
+  if (!user || !user.resetOtpHash || !user.resetOtpExpiresAt) {
+    return res.status(400).json({ message: 'Invalid OTP or expired OTP' });
+  }
+
+  if (user.resetOtpExpiresAt.getTime() < Date.now()) {
+    user.resetOtpHash = null;
+    user.resetOtpExpiresAt = null;
+    user.resetOtpRequestedAt = null;
+    user.resetOtpAttempts = 0;
+    await user.save();
+    return res.status(400).json({ message: 'Invalid OTP or expired OTP' });
+  }
+
+  if ((user.resetOtpAttempts || 0) >= 5) {
+    return res.status(429).json({ message: 'Too many attempts. Please request a new OTP.' });
+  }
+
+  const ok = await bcrypt.compare(String(otp), user.resetOtpHash);
+  if (!ok) {
+    user.resetOtpAttempts = (user.resetOtpAttempts || 0) + 1;
+    await user.save();
+    return res.status(400).json({ message: 'Invalid OTP or expired OTP' });
+  }
+
+  user.passwordHash = await bcrypt.hash(String(newPassword), 10);
+  user.resetOtpHash = null;
+  user.resetOtpExpiresAt = null;
+  user.resetOtpRequestedAt = null;
+  user.resetOtpAttempts = 0;
+  await user.save();
+
+  return res.json({ message: 'Password updated successfully. Please login.' });
 });
 
 module.exports = { authRouter: router };

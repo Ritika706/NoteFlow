@@ -3,7 +3,7 @@ const path = require('path');
 const multer = require('multer');
 const { Note } = require('../models/Note');
 const { User } = require('../models/User');
-const { authRequired } = require('../middleware/auth');
+const { authRequired, authOptional } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -55,19 +55,111 @@ router.get('/', async (req, res) => {
 
   const notes = await Note.find(filter)
     .sort({ createdAt: -1 })
-    .select('title subject semester description mimeType originalName uploadedBy createdAt downloadCount');
+    .select('title subject semester description mimeType originalName uploadedBy createdAt downloadCount likesCount ratingAvg ratingCount');
 
   return res.json({ notes });
 });
 
-// Public details
-router.get('/:id', async (req, res) => {
+// Public top-rated
+router.get('/top-rated', async (req, res) => {
+  const limit = Math.min(Math.max(Number(req.query.limit || 6), 1), 24);
+  const notes = await Note.find({ ratingCount: { $gt: 0 } })
+    .sort({ ratingAvg: -1, ratingCount: -1, createdAt: -1 })
+    .limit(limit)
+    .select('title subject semester description mimeType originalName uploadedBy createdAt downloadCount likesCount ratingAvg ratingCount');
+
+  return res.json({ notes });
+});
+
+// Public details (with optional viewer flags)
+router.get('/:id', authOptional, async (req, res) => {
   const note = await Note.findById(req.params.id)
-    .populate('uploadedBy', 'name email')
+    .populate('uploadedBy', 'name')
     .lean();
 
   if (!note) return res.status(404).json({ message: 'Note not found' });
-  return res.json({ note });
+
+  const viewer = { liked: false, bookmarked: false, rating: 0 };
+  if (req.user?.id) {
+    viewer.liked = Array.isArray(note.likedBy) ? note.likedBy.some((u) => String(u) === String(req.user.id)) : false;
+    const myRating = Array.isArray(note.ratings)
+      ? note.ratings.find((r) => String(r.user) === String(req.user.id))
+      : null;
+    viewer.rating = Number(myRating?.value || 0);
+
+    const me = await User.findById(req.user.id).select('bookmarks').lean();
+    viewer.bookmarked = Array.isArray(me?.bookmarks)
+      ? me.bookmarks.some((n) => String(n) === String(note._id))
+      : false;
+  }
+
+  // Don't leak internal arrays to clients
+  delete note.likedBy;
+  delete note.ratings;
+
+  return res.json({ note, viewer });
+});
+
+// Protected: toggle like
+router.post('/:id/like', authRequired, async (req, res) => {
+  const note = await Note.findById(req.params.id).select('likedBy likesCount');
+  if (!note) return res.status(404).json({ message: 'Note not found' });
+
+  const userId = String(req.user.id);
+  const already = (note.likedBy || []).some((u) => String(u) === userId);
+
+  if (already) {
+    await Note.updateOne(
+      { _id: note._id },
+      {
+        $pull: { likedBy: req.user.id },
+        $inc: { likesCount: -1 },
+      }
+    );
+    return res.json({ liked: false });
+  }
+
+  await Note.updateOne(
+    { _id: note._id },
+    {
+      $addToSet: { likedBy: req.user.id },
+      $inc: { likesCount: 1 },
+    }
+  );
+  return res.json({ liked: true });
+});
+
+// Protected: rate note (1-5)
+router.post('/:id/rate', authRequired, async (req, res) => {
+  const value = Number(req.body?.value);
+  if (!Number.isFinite(value) || value < 1 || value > 5) {
+    return res.status(400).json({ message: 'value must be between 1 and 5' });
+  }
+
+  const note = await Note.findById(req.params.id).select('ratings ratingAvg ratingCount');
+  if (!note) return res.status(404).json({ message: 'Note not found' });
+
+  const hasDownloaded = await User.exists({ _id: req.user.id, 'downloads.note': note._id });
+  if (!hasDownloaded) {
+    return res.status(403).json({ message: 'Download required to rate this note' });
+  }
+
+  const userId = String(req.user.id);
+  const existing = (note.ratings || []).find((r) => String(r.user) === userId);
+
+  if (existing) {
+    existing.value = value;
+  } else {
+    note.ratings.push({ user: req.user.id, value });
+  }
+
+  const count = note.ratings.length;
+  const sum = note.ratings.reduce((acc, r) => acc + Number(r.value || 0), 0);
+  note.ratingCount = count;
+  note.ratingAvg = count ? Math.round((sum / count) * 10) / 10 : 0;
+  await note.save();
+
+  return res.json({ rating: value, ratingAvg: note.ratingAvg, ratingCount: note.ratingCount });
 });
 
 // Protected upload

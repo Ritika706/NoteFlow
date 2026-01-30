@@ -11,6 +11,21 @@ const noteSchema = new mongoose.Schema(
     mimeType: { type: String, required: true },
     downloadCount: { type: Number, default: 0 },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+
+    likesCount: { type: Number, default: 0 },
+    likedBy: { type: [mongoose.Schema.Types.ObjectId], ref: 'User', default: [] },
+
+    ratingAvg: { type: Number, default: 0 },
+    ratingCount: { type: Number, default: 0 },
+    ratings: {
+      type: [
+        {
+          user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+          value: { type: Number, required: true, min: 1, max: 5 },
+        },
+      ],
+      default: [],
+    },
   },
   { timestamps: true }
 );
