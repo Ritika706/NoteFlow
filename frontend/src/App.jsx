@@ -3,6 +3,7 @@ import { isLoggedIn } from './lib/auth';
 import { Navbar } from './components/Navbar';
 import HomePage from './pages/HomePage.jsx';
 import AuthPage from './pages/AuthPage.jsx';
+import ForgotPasswordPage from './pages/ForgotPasswordPage.jsx';
 import UploadPage from './pages/UploadPage.jsx';
 import NoteDetailsPage from './pages/NoteDetailsPage.jsx';
 import ProfilePage from './pages/ProfilePage.jsx';
@@ -21,6 +22,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/auth" element={<AuthPage />} />
+          <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="/login" element={<Navigate to="/auth?mode=login" replace />} />
           <Route path="/register" element={<Navigate to="/auth?mode=signup" replace />} />
           <Route path="/note/:id" element={<NoteDetailsPage />} />

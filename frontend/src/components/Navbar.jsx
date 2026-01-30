@@ -42,7 +42,7 @@ export function Navbar() {
     <header className="sticky top-0 z-50">
       <div className="glass">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-3">
-          <Link to="/" className="font-display text-lg font-bold tracking-tight">
+          <Link to="/" className="font-display text-xl sm:text-2xl font-bold tracking-tight">
             <span className="text-primary">Note</span>
             <span className="text-slate-900 dark:text-slate-50">Flow</span>
           </Link>

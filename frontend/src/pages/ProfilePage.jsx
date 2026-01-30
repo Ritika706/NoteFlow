@@ -40,6 +40,7 @@ export default function ProfilePage() {
   const user = profile?.user;
   const uploads = profile?.uploads || [];
   const downloads = profile?.downloads || [];
+  const bookmarks = profile?.bookmarks || [];
 
   const downloadNotes = useMemo(() => {
     return downloads
@@ -100,6 +101,7 @@ export default function ProfilePage() {
           tabs={[
             { value: 'uploads', label: 'My Uploads' },
             { value: 'downloads', label: 'My Downloads' },
+            { value: 'bookmarks', label: 'My Bookmarks' },
           ]}
         />
 
@@ -115,7 +117,7 @@ export default function ProfilePage() {
               </div>
             )}
           </div>
-        ) : (
+        ) : tab === 'downloads' ? (
           <div className="mt-5">
             {downloadNotes.length === 0 ? (
               <div className="text-sm text-slate-600 dark:text-slate-300">No downloads yet.</div>
@@ -127,6 +129,18 @@ export default function ProfilePage() {
                     note={{ ...n, downloadCount: n.downloadCount || 0 }}
                     onDownload={handleDownload}
                   />
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-5">
+            {bookmarks.length === 0 ? (
+              <div className="text-sm text-slate-600 dark:text-slate-300">No bookmarks yet.</div>
+            ) : (
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {bookmarks.map((n) => (
+                  <NoteCard key={n._id} note={n} onDownload={handleDownload} />
                 ))}
               </div>
             )}

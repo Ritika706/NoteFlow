@@ -110,6 +110,15 @@ export default function AuthPage() {
             {loading ? 'Please wait…' : mode === 'signup' ? 'Create Account' : 'Login'}
           </Button>
 
+          {mode === 'login' ? (
+            <Link
+              to="/forgot-password"
+              className="inline-flex items-center justify-center w-full rounded-xl px-3 py-2 text-sm font-medium text-primary hover:bg-primary/10"
+            >
+              Forgot password?
+            </Link>
+          ) : null}
+
           <Link to="/" className="inline-flex items-center justify-center w-full rounded-xl px-3 py-2 text-sm font-medium text-slate-700 dark:text-slate-200 hover:bg-primary/10">
             Back to home
           </Link>

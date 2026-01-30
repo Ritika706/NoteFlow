@@ -12,12 +12,22 @@ import { NoteCard } from '../components/NoteCard';
 export default function HomePage() {
   const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
+  const [topRated, setTopRated] = useState([]);
   const [q, setQ] = useState('');
   const [subject, setSubject] = useState('');
   const [semester, setSemester] = useState('');
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  async function loadTopRated() {
+    try {
+      const topRes = await api.get('/api/notes/top-rated?limit=6').catch(() => ({ data: { notes: [] } }));
+      setTopRated(topRes.data.notes || []);
+    } catch {
+      // ignore
+    }
+  }
 
   async function load() {
     setLoading(true);
@@ -29,6 +39,7 @@ export default function HomePage() {
       ]);
       setNotes(notesRes.data.notes || []);
       setStats(statsRes.data);
+      await loadTopRated();
     } catch (e) {
       setError(e?.response?.data?.message || 'Failed to load notes');
     } finally {
@@ -38,6 +49,15 @@ export default function HomePage() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    function onTopRatedUpdated() {
+      loadTopRated();
+    }
+    window.addEventListener('noteflow:topRatedUpdated', onTopRatedUpdated);
+    return () => window.removeEventListener('noteflow:topRatedUpdated', onTopRatedUpdated);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -141,6 +161,23 @@ export default function HomePage() {
           </Card>
         </div>
       </section>
+
+      {topRated?.length ? (
+        <section className="space-y-4">
+          <div>
+            <div className="font-display text-xl font-bold">Top Rated Notes</div>
+            <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+              Only notes rated by users are shown here.
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {topRated.map((n) => (
+              <NoteCard key={n._id} note={n} onDownload={handleDownload} />
+            ))}
+          </div>
+        </section>
+      ) : null}
 
       <section id="browse" className="space-y-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end">

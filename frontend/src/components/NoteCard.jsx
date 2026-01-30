@@ -17,6 +17,12 @@ export function NoteCard({ note, onDownload, className }) {
         <div className="text-right text-xs text-slate-500 dark:text-slate-400">
           <div className="font-medium text-slate-700 dark:text-slate-200">{note.downloadCount || 0}</div>
           <div>downloads</div>
+          {note.ratingCount ? (
+            <div className="mt-2">
+              <div className="font-medium text-slate-700 dark:text-slate-200">★ {note.ratingAvg || 0}</div>
+              <div>{note.ratingCount} ratings</div>
+            </div>
+          ) : null}
         </div>
       </div>
 
