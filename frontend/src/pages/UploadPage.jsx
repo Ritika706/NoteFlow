@@ -6,6 +6,7 @@ import { Input } from '../components/Input';
 import { Select } from '../components/Select';
 import { Button } from '../components/Button';
 import { toastError, toastSuccess } from '../lib/toast';
+import { getAxiosErrorMessage } from '../lib/axiosError';
 
 export default function UploadPage() {
   const navigate = useNavigate();
@@ -66,7 +67,7 @@ export default function UploadPage() {
       toastSuccess('Note uploaded successfully!');
       navigate(`/note/${res.data.note?._id || ''}`);
     } catch (err) {
-      toastError(err?.response?.data?.message || 'Failed to upload note');
+      toastError(await getAxiosErrorMessage(err, 'Failed to upload note'));
     } finally {
       setLoading(false);
     }
