@@ -11,6 +11,7 @@ const { notesRouter } = require('./routes/notes');
 const { meRouter } = require('./routes/me');
 const { Note } = require('./models/Note');
 const { User } = require('./models/User');
+const mongoose = require('mongoose');
 
 const app = express();
 
@@ -50,7 +51,21 @@ app.options(/.*/, cors(corsOptions));
 // Public preview support
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-app.get('/health', (req, res) => res.json({ ok: true }));
+app.get('/health', (req, res) => {
+  const base = { ok: true };
+  const includeDb = String(process.env.DEBUG_DB_INFO || 'false').toLowerCase() === 'true';
+  if (!includeDb) return res.json(base);
+
+  const conn = mongoose.connection;
+  return res.json({
+    ...base,
+    db: {
+      host: conn?.host || null,
+      name: conn?.name || null,
+      readyState: conn?.readyState,
+    },
+  });
+});
 
 app.get('/api/stats', async (req, res) => {
   const [totalNotes, contributorsAgg, downloadsAgg] = await Promise.all([

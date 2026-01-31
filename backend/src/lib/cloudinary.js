@@ -22,7 +22,12 @@ async function uploadToCloudinary(localFilePath, { folder = 'noteflow', resource
   if (!isCloudinaryConfigured()) return null;
   initCloudinary();
 
-  const res = await cloudinary.uploader.upload(localFilePath, {
+  const useLargeUpload = String(process.env.CLOUDINARY_USE_LARGE_UPLOAD || 'false').toLowerCase() === 'true';
+
+  const uploadFn = useLargeUpload
+    ? cloudinary.uploader.upload_large.bind(cloudinary.uploader)
+    : cloudinary.uploader.upload.bind(cloudinary.uploader);
+  const res = await uploadFn(localFilePath, {
     folder,
     resource_type: resourceType,
     use_filename: true,

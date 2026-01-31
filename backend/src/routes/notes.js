@@ -185,6 +185,14 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
     return res.status(400).json({ message: 'file is required' });
   }
 
+  const requireCloudinary = String(process.env.REQUIRE_CLOUDINARY || 'false').toLowerCase() === 'true';
+  if (requireCloudinary && !isCloudinaryConfigured()) {
+    return res.status(503).json({
+      message:
+        'Storage is not configured. Please set Cloudinary env variables on the server (CLOUDINARY_CLOUD_NAME/API_KEY/API_SECRET) before uploading.',
+    });
+  }
+
   let fileUrl = '';
   if (isCloudinaryConfigured()) {
     const maxBytes = getMaxBytes();
@@ -206,7 +214,7 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
           if (compressed.size > maxBytes) {
             return res.status(413).json({
               message:
-                'PDF is too large for free storage limit. Please upload a smaller PDF (<= 10MB) or upgrade storage plan.',
+                'PDF is still too large even after compression. Please upload a smaller PDF, or increase PDF_CLOUDINARY_MAX_MB / upgrade your Cloudinary plan.',
             });
           }
         }
