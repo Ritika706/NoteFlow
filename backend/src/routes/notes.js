@@ -295,7 +295,12 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
       }
       // If Cloudinary fails, do NOT silently fall back to local in production.
       // Local uploads on Render can disappear after redeploy/restart.
-      return res.status(502).json({ message: 'Failed to upload file to storage. Please try again.' });
+      const truncated = msg && msg.length > 300 ? `${msg.slice(0, 300)}…` : msg;
+      return res.status(502).json({
+        message: truncated
+          ? `Failed to upload file to storage: ${truncated}`
+          : 'Failed to upload file to storage. Please try again.',
+      });
     } finally {
       // Best-effort cleanup of local temp file (Render disk is ephemeral anyway)
       try {
