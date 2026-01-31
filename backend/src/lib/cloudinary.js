@@ -19,11 +19,14 @@ function initCloudinary() {
   return true;
 }
 
-async function uploadToCloudinary(localFilePath, { folder = 'noteflow', resourceType = 'auto' } = {}) {
+async function uploadToCloudinary(
+  localFilePath,
+  { folder = 'noteflow', resourceType = 'auto', forceLargeUpload = false } = {}
+) {
   if (!isCloudinaryConfigured()) return null;
   initCloudinary();
 
-  const useLargeUpload = envBool('CLOUDINARY_USE_LARGE_UPLOAD', false);
+  const useLargeUpload = forceLargeUpload || envBool('CLOUDINARY_USE_LARGE_UPLOAD', false);
   const accessMode = envString('CLOUDINARY_ACCESS_MODE', '');
 
   const uploadFn = useLargeUpload
