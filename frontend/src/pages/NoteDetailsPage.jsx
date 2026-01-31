@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../lib/api';
 import { isLoggedIn } from '../lib/auth';
 import { toastError, toastInfo, toastSuccess } from '../lib/toast';
+import { getAxiosErrorMessage } from '../lib/axiosError';
 import { Badge } from '../components/Badge';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
@@ -46,6 +47,11 @@ export default function NoteDetailsPage() {
     if (note?.fileUrl) return note.fileUrl;
     if (!note?.filePath) return null;
     const base = String(import.meta.env.VITE_API_URL || 'http://localhost:5000').trim().replace(/\/+$/, '');
+
+    // On production hosts (Render/Vercel/etc), local /uploads is usually ephemeral.
+    // Only use /uploads fallback for local development.
+    const isLocalApi = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(base);
+    if (!isLocalApi) return null;
     return `${base}/uploads/${note.filePath}`;
   }, [note]);
 
@@ -75,7 +81,8 @@ export default function NoteDetailsPage() {
 
       toastSuccess('Download started!');
     } catch (e) {
-      toastError(e?.response?.data?.message || 'Download failed');
+      const msg = await getAxiosErrorMessage(e, 'Download failed');
+      toastError(msg);
     }
   }
 
@@ -249,7 +256,11 @@ export default function NoteDetailsPage() {
           ) : null}
         </div>
         {!previewUrl ? (
-          <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">No preview available.</div>
+          <div className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+            {note?.fileUrl
+              ? 'No preview available.'
+              : 'Preview unavailable because this file is not stored in cloud storage. Please re-upload the note.'}
+          </div>
         ) : mime.includes('pdf') ? (
           <div
             ref={previewWrapRef}

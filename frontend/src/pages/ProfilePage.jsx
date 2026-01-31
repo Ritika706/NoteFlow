@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { clearToken } from '../lib/auth';
 import { toastError, toastInfo, toastSuccess } from '../lib/toast';
+import { getAxiosErrorMessage } from '../lib/axiosError';
 import { Card } from '../components/Card';
 import { Avatar } from '../components/Avatar';
 import { Tabs } from '../components/Tabs';
@@ -76,7 +77,8 @@ export default function ProfilePage() {
         navigate('/auth?mode=login');
         return;
       }
-      toastError(e?.response?.data?.message || 'Download failed');
+      const msg = await getAxiosErrorMessage(e, 'Download failed');
+      toastError(msg);
     }
   }
 

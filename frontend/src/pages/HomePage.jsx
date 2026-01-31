@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { isLoggedIn } from '../lib/auth';
 import { toastInfo, toastSuccess, toastError } from '../lib/toast';
+import { getAxiosErrorMessage } from '../lib/axiosError';
 import { Button } from '../components/Button';
 import { Card } from '../components/Card';
 import { Input } from '../components/Input';
@@ -115,7 +116,8 @@ export default function HomePage() {
       setNotes((prev) => prev.map((n) => (n._id === note._id ? { ...n, downloadCount: (n.downloadCount || 0) + 1 } : n)));
       setStats((s) => (s ? { ...s, totalDownloads: (s.totalDownloads || 0) + 1 } : s));
     } catch (e) {
-      toastError(e?.response?.data?.message || 'Download failed');
+      const msg = await getAxiosErrorMessage(e, 'Download failed');
+      toastError(msg);
     }
   }
 

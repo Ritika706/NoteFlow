@@ -197,16 +197,22 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
   if (isCloudinaryConfigured()) {
     const maxBytes = getMaxBytes();
     const shouldTryCompress = String(process.env.PDF_COMPRESS || 'true').toLowerCase() !== 'false';
+    const debugTiming = String(process.env.DEBUG_UPLOAD_TIMING || 'false').toLowerCase() === 'true';
+    const startedAt = Date.now();
 
     try {
       let uploadPath = req.file.path;
       let compressedTempPath = null;
+      let compressMs = 0;
+      let cloudinaryMs = 0;
 
       // If Cloudinary free plan rejects >10MB PDFs, try to compress automatically
       if (shouldTryCompress && String(req.file.mimetype || '').includes('pdf')) {
         const stat = await fs.promises.stat(req.file.path);
         if (stat.size > maxBytes) {
+          const c0 = Date.now();
           const compressed = await compressPdfBestEffort(req.file.path);
+          compressMs = Date.now() - c0;
           if (compressed.path !== req.file.path) {
             uploadPath = compressed.path;
             compressedTempPath = compressed.path;
@@ -220,11 +226,20 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
         }
       }
 
+      const u0 = Date.now();
       const uploaded = await uploadToCloudinary(uploadPath, {
         folder: process.env.CLOUDINARY_FOLDER || 'noteflow',
         resourceType: 'auto',
       });
+      cloudinaryMs = Date.now() - u0;
       fileUrl = uploaded?.url || '';
+
+      if (debugTiming) {
+        const totalMs = Date.now() - startedAt;
+        console.log(
+          `[upload] mime=${req.file.mimetype} size=${req.file.size}B compressMs=${compressMs} cloudinaryMs=${cloudinaryMs} totalMs=${totalMs}`
+        );
+      }
 
       if (compressedTempPath) {
         try {
@@ -234,6 +249,9 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
         }
       }
     } catch (e) {
+      if (debugTiming) {
+        console.log('[upload] failed:', e?.message || e);
+      }
       // If Cloudinary fails, do NOT silently fall back to local in production.
       // Local uploads on Render can disappear after redeploy/restart.
       return res.status(502).json({ message: 'Failed to upload file to storage. Please try again.' });
