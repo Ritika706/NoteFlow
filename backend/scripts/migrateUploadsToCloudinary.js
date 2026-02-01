@@ -8,7 +8,6 @@ dotenv.config();
 const { connectDb } = require('../src/db');
 const { Note } = require('../src/models/Note');
 const { isCloudinaryConfigured, uploadToCloudinary } = require('../src/lib/cloudinary');
-const { compressPdfWithILovePdf, isILovePdfConfigured } = require('../src/lib/ilovepdfCompress');
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -49,7 +48,6 @@ async function main() {
   let skippedMissing = 0;
   let skippedNoFilePath = 0;
   let skippedTooLarge = 0;
-  let skippedCompressFailed = 0;
 
   for await (const note of cursor) {
     scanned += 1;
@@ -73,7 +71,6 @@ async function main() {
     }
 
     let uploadPath = localPath;
-    let compressedTempPath = null;
     try {
       const MAX_PDF_BYTES = 10 * 1024 * 1024;
       const isPdf = String(note.mimeType || '').includes('pdf') || String(localPath).toLowerCase().endsWith('.pdf');
@@ -81,28 +78,14 @@ async function main() {
       if (isPdf) {
         const stat = await fs.promises.stat(localPath);
         if (stat.size > MAX_PDF_BYTES) {
-          if (!isILovePdfConfigured()) {
-            skippedCompressFailed += 1;
-            console.log('  ⚠️ iLovePDF is not configured, skipping');
-            continue;
-          }
-
-          const compressed = await compressPdfWithILovePdf(localPath, {
-            compressionLevel: String(process.env.ILOVEPDF_COMPRESSION_LEVEL || 'recommended'),
-          });
-          uploadPath = compressed.path;
-          compressedTempPath = compressed.path;
-
-          if (compressed.size > MAX_PDF_BYTES) {
-            skippedTooLarge += 1;
-            console.log('  ⚠️ still > 10MB after compression, skipping');
-            continue;
-          }
+          skippedTooLarge += 1;
+          console.log('  ⚠️ File > 10MB, skipping (Cloudinary limit)');
+          continue;
         }
       }
     } catch (e) {
-      skippedCompressFailed += 1;
-      console.log(`  ⚠️ compression failed, skipping: ${e.message}`);
+      skippedTooLarge += 1;
+      console.log(`  ⚠️ stat failed, skipping: ${e.message}`);
       continue;
     }
 
@@ -110,14 +93,6 @@ async function main() {
       folder: process.env.CLOUDINARY_FOLDER || 'noteflow',
       resourceType: 'auto',
     });
-
-    if (compressedTempPath) {
-      try {
-        await fs.promises.unlink(compressedTempPath);
-      } catch (e) {
-        // ignore
-      }
-    }
 
     if (uploaded?.url) {
       note.fileUrl = uploaded.url;
@@ -134,8 +109,7 @@ async function main() {
   console.log(`Migrated: ${migrated}${dryRun ? ' (dry-run)' : ''}`);
   console.log(`Skipped (missing local file): ${skippedMissing}`);
   console.log(`Skipped (no filePath): ${skippedNoFilePath}`);
-  console.log(`Skipped (too large after compression): ${skippedTooLarge}`);
-  console.log(`Skipped (compression failed): ${skippedCompressFailed}`);
+  console.log(`Skipped (too large >10MB): ${skippedTooLarge}`);
   process.exit(0);
 }
 
