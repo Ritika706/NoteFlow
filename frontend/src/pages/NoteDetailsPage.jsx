@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, apiBaseUrl } from '../lib/api';
+import { api } from '../lib/api';
 import { isLoggedIn } from '../lib/auth';
 import { toastError, toastInfo, toastSuccess } from '../lib/toast';
 import { getAxiosErrorMessage } from '../lib/axiosError';
@@ -44,36 +44,11 @@ export default function NoteDetailsPage() {
   }, []);
 
   const previewUrl = useMemo(() => {
-    const base = String(apiBaseUrl || '').trim().replace(/\/+$/, '');
-
-    // Helper: prefix with API base if needed
-    const toAbsolute = (p) => {
-      const path = String(p || '').trim();
-      if (!path) return null;
-      return `${base}/${path.replace(/^\/+/, '')}`;
-    };
-
-    const isHttpUrl = (u) => /^https?:\/\//i.test(u);
-
-    if (note?.fileUrl) {
-      const raw = String(note.fileUrl).trim();
-      if (!raw) return null;
-      if (isHttpUrl(raw)) return raw;
-
-      // If backend stored "/uploads/..." or any "/...", prefix API base
-      if (raw.startsWith('/')) return toAbsolute(raw);
-
-      // If backend stored just the filename, treat as uploads file
-      if (!raw.includes('/')) return `${base}/uploads/${raw}`;
-
-      // Any other relative path
-      return toAbsolute(raw);
+    // Cloudinary URL - use directly
+    if (note?.fileUrl && /^https?:\/\//i.test(note.fileUrl)) {
+      return note.fileUrl;
     }
-
-    if (note?.filePath) {
-      return `${base}/uploads/${note.filePath}`;
-    }
-
+    // No valid URL
     return null;
   }, [note]);
 
