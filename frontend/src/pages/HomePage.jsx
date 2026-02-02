@@ -12,14 +12,6 @@ import { NoteCard } from '../components/NoteCard';
 
 export default function HomePage() {
   const navigate = useNavigate();
-  
-  // Redirect to login if not logged in
-  useEffect(() => {
-    if (!isLoggedIn()) {
-      navigate('/auth?mode=login', { replace: true });
-    }
-  }, [navigate]);
-
   const [notes, setNotes] = useState([]);
   const [topRated, setTopRated] = useState([]);
   const [q, setQ] = useState('');
@@ -30,6 +22,7 @@ export default function HomePage() {
   const [error, setError] = useState('');
 
   async function loadTopRated() {
+    if (!isLoggedIn()) return;
     try {
       const topRes = await api.get('/api/notes/top-rated?limit=6').catch(() => ({ data: { notes: [] } }));
       setTopRated(topRes.data.notes || []);
@@ -39,7 +32,10 @@ export default function HomePage() {
   }
 
   async function load() {
-    if (!isLoggedIn()) return;
+    if (!isLoggedIn()) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError('');
     try {
@@ -58,9 +54,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    if (isLoggedIn()) {
-      load();
-    }
+    load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -132,11 +126,6 @@ export default function HomePage() {
     }
   }
 
-  // Don't render anything if not logged in (will redirect)
-  if (!isLoggedIn()) {
-    return null;
-  }
-
   return (
     <div className="space-y-8">
       <section className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-primary/30 via-sky-400/20 to-accent/20 p-8 shadow-soft border border-white/30 dark:border-white/10">
@@ -150,9 +139,18 @@ export default function HomePage() {
           </p>
 
           <div className="mt-6 flex flex-wrap gap-3">
-            <Button variant="outline" onClick={() => document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })}>
-              Browse Notes
-            </Button>
+            {!isLoggedIn() ? (
+              <Button
+                className="bg-gradient-to-r from-accent to-accent/80"
+                onClick={() => navigate('/auth?mode=signup')}
+              >
+                Get Started
+              </Button>
+            ) : (
+              <Button variant="outline" onClick={() => document.getElementById('browse')?.scrollIntoView({ behavior: 'smooth' })}>
+                Browse Notes
+              </Button>
+            )}
           </div>
         </div>
 
@@ -172,7 +170,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {topRated?.length ? (
+      {isLoggedIn() && topRated?.length ? (
         <section className="space-y-4">
           <div>
             <div className="font-display text-xl font-bold">Top Rated Notes</div>
@@ -189,37 +187,51 @@ export default function HomePage() {
         </section>
       ) : null}
 
-      <section id="browse" className="space-y-4">
-        <div className="flex flex-col gap-3 md:flex-row md:items-end">
-          <div className="flex-1">
-            <label className="text-sm font-medium">Search</label>
-            <div className="relative mt-1">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                  <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="2" />
-                  <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                </svg>
-              </span>
-              <Input
-                className="pl-9"
-                placeholder="Search title, subject, semester…"
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-              />
+      {!isLoggedIn() ? (
+        <section id="browse" className="space-y-4">
+          <Card className="glass p-8 text-center">
+            <div className="font-display text-xl font-bold">Login to View Notes</div>
+            <p className="mt-2 text-slate-600 dark:text-slate-300">
+              Please login or create an account to browse and download notes.
+            </p>
+            <div className="mt-4 flex justify-center gap-3">
+              <Button onClick={() => navigate('/auth?mode=login')}>Login</Button>
+              <Button variant="outline" onClick={() => navigate('/auth?mode=signup')}>Sign Up</Button>
             </div>
-          </div>
-          <div className="w-full md:w-56">
-            <label className="text-sm font-medium">Subject</label>
-            <Select className="mt-1" value={subject} onChange={(e) => setSubject(e.target.value)}>
-              <option value="">All</option>
-              {subjects.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </Select>
-          </div>
-          <div className="w-full md:w-56">
-            <label className="text-sm font-medium">Semester</label>
-            <Select className="mt-1" value={semester} onChange={(e) => setSemester(e.target.value)}>
+          </Card>
+        </section>
+      ) : (
+        <section id="browse" className="space-y-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium">Search</label>
+              <div className="relative mt-1">
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M10.5 18a7.5 7.5 0 1 1 0-15 7.5 7.5 0 0 1 0 15Z" stroke="currentColor" strokeWidth="2" />
+                    <path d="M16.5 16.5 21 21" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                </span>
+                <Input
+                  className="pl-9"
+                  placeholder="Search title, subject, semester…"
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="w-full md:w-56">
+              <label className="text-sm font-medium">Subject</label>
+              <Select className="mt-1" value={subject} onChange={(e) => setSubject(e.target.value)}>
+                <option value="">All</option>
+                {subjects.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="w-full md:w-56">
+              <label className="text-sm font-medium">Semester</label>
+              <Select className="mt-1" value={semester} onChange={(e) => setSemester(e.target.value)}>
               <option value="">All</option>
               {semesters.map((s) => (
                 <option key={s} value={s}>{s}</option>
@@ -255,7 +267,8 @@ export default function HomePage() {
             ) : null}
           </div>
         ) : null}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
