@@ -57,24 +57,36 @@ function generateOtp() {
   return String(n).padStart(6, '0');
 }
 
-async function sendResetOtpEmail({ to, name, otp }) {
+// Create reusable transporter (cached)
+let cachedTransporter = null;
+function getTransporter() {
+  if (cachedTransporter) return cachedTransporter;
+
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const from = process.env.SMTP_FROM;
   const port = Number(process.env.SMTP_PORT || 587);
 
-  if (!host || !user || !pass || !from) return false;
+  if (!host || !user || !pass) return null;
 
-  // Lazy-load to keep deps optional in dev.
-  // eslint-disable-next-line global-require
   const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
+  cachedTransporter = nodemailer.createTransport({
     host,
     port,
     secure: port === 465,
     auth: { user, pass },
+    pool: true, // Use connection pooling
+    maxConnections: 3,
   });
+
+  return cachedTransporter;
+}
+
+async function sendResetOtpEmail({ to, name, otp }) {
+  const transporter = getTransporter();
+  const from = process.env.SMTP_FROM;
+
+  if (!transporter || !from) return false;
 
   await transporter.sendMail({
     from,
@@ -109,16 +121,14 @@ router.post('/forgot-password/request', async (req, res) => {
   user.resetOtpAttempts = 0;
   await user.save();
 
-  let emailed = false;
-  try {
-    emailed = await sendResetOtpEmail({ to: user.email, name: user.name, otp });
-  } catch (e) {
-    emailed = false;
-  }
-
-  if (!emailed) {
-    console.log(`🔐 Password reset OTP for ${user.email}: ${otp} (expires ${expiresAt.toISOString()})`);
-  }
+  // Send email in background (don't wait)
+  sendResetOtpEmail({ to: user.email, name: user.name, otp })
+    .then((sent) => {
+      if (!sent) console.log(`🔐 OTP for ${user.email}: ${otp}`);
+    })
+    .catch(() => {
+      console.log(`🔐 OTP for ${user.email}: ${otp}`);
+    });
 
   return res.json({ message: 'If an account exists, an OTP has been sent.' });
 });
