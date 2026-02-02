@@ -21,6 +21,9 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
+  const statsLoading = loading && stats == null;
+  const statValue = (v) => (statsLoading ? '…' : v ?? 0);
+
   async function loadTopRated() {
     if (!isLoggedIn()) return;
     try {
@@ -156,17 +159,17 @@ export default function HomePage() {
         <div className="mt-8 grid gap-3 sm:grid-cols-3">
           <Card className="glass p-4 text-center">
             <div className="text-3xl mb-1">📚</div>
-            <div className="font-display text-2xl font-bold text-primary">{stats?.totalNotes ?? 0}</div>
+            <div className="font-display text-2xl font-bold text-primary">{statValue(stats?.totalNotes)}</div>
             <div className="text-sm text-slate-600 dark:text-slate-300">Notes Shared</div>
           </Card>
           <Card className="glass p-4 text-center">
             <div className="text-3xl mb-1">👥</div>
-            <div className="font-display text-2xl font-bold text-primary">{stats?.contributors ?? 0}</div>
+            <div className="font-display text-2xl font-bold text-primary">{statValue(stats?.contributors)}</div>
             <div className="text-sm text-slate-600 dark:text-slate-300">Contributors</div>
           </Card>
           <Card className="glass p-4 text-center">
             <div className="text-3xl mb-1">⬇️</div>
-            <div className="font-display text-2xl font-bold text-primary">{stats?.totalDownloads ?? 0}</div>
+            <div className="font-display text-2xl font-bold text-primary">{statValue(stats?.totalDownloads)}</div>
             <div className="text-sm text-slate-600 dark:text-slate-300">Downloads</div>
           </Card>
         </div>

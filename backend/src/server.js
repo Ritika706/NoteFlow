@@ -13,6 +13,7 @@ const { Note } = require('./models/Note');
 const { User } = require('./models/User');
 const mongoose = require('mongoose');
 const { isCloudinaryConfigured } = require('./lib/cloudinary');
+const { isGhostscriptAvailable } = require('./lib/ghostscript');
 const { envBool, envString } = require('./lib/env');
 
 const app = express();
@@ -22,7 +23,8 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 const corsOriginRaw = process.env.CORS_ORIGIN || 'http://localhost:5173';
 const corsAllowList = corsOriginRaw
@@ -58,8 +60,9 @@ app.options(/.*/, cors(corsOptions));
 // Public preview support
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
-app.get('/health', (req, res) => {
-  const base = { ok: true };
+app.get('/health', async (req, res) => {
+  const gsAvailable = await isGhostscriptAvailable();
+  const base = { ok: true, ghostscript: gsAvailable };
   const includeDb = envBool('DEBUG_DB_INFO', false);
   if (!includeDb) return res.json(base);
 
@@ -97,12 +100,17 @@ app.get('/api/stats', async (req, res) => {
   try {
     const [totalNotes, contributorsAgg, downloadsAgg] = await Promise.all([
       Note.countDocuments(),
-      User.countDocuments(),
+      Note.aggregate([
+        { $match: { uploadedBy: { $ne: null } } },
+        { $group: { _id: '$uploadedBy' } },
+        { $count: 'count' },
+      ]),
       Note.aggregate([{ $group: { _id: null, total: { $sum: '$downloadCount' } } }]),
     ]);
 
+    const contributors = Number(contributorsAgg?.[0]?.count || 0);
     const totalDownloads = Number(downloadsAgg?.[0]?.total || 0);
-    return res.json({ totalNotes, contributors: contributorsAgg, totalDownloads });
+    return res.json({ totalNotes, contributors, totalDownloads });
   } catch (e) {
     console.error('[stats] error:', e);
     return res.status(500).json({ message: 'Failed to load stats' });
