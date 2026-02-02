@@ -67,7 +67,10 @@ function getTransporter() {
   const pass = process.env.SMTP_PASS;
   const port = Number(process.env.SMTP_PORT || 587);
 
-  if (!host || !user || !pass) return null;
+  if (!host || !user || !pass) {
+    console.log('[SMTP] Missing config - host:', !!host, 'user:', !!user, 'pass:', !!pass);
+    return null;
+  }
 
   const nodemailer = require('nodemailer');
   cachedTransporter = nodemailer.createTransport({
@@ -75,7 +78,7 @@ function getTransporter() {
     port,
     secure: port === 465,
     auth: { user, pass },
-    pool: true, // Use connection pooling
+    pool: true,
     maxConnections: 3,
   });
 
@@ -86,16 +89,24 @@ async function sendResetOtpEmail({ to, name, otp }) {
   const transporter = getTransporter();
   const from = process.env.SMTP_FROM;
 
-  if (!transporter || !from) return false;
+  if (!transporter || !from) {
+    console.log('[SMTP] Transporter or FROM missing - transporter:', !!transporter, 'from:', !!from);
+    return false;
+  }
 
-  await transporter.sendMail({
-    from,
-    to,
-    subject: 'NoteFlow password reset OTP',
-    text: `Hi ${name || 'there'},\n\nYour NoteFlow password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you did not request this, you can ignore this email.`,
-  });
-
-  return true;
+  try {
+    await transporter.sendMail({
+      from,
+      to,
+      subject: 'NoteFlow password reset OTP',
+      text: `Hi ${name || 'there'},\n\nYour NoteFlow password reset OTP is: ${otp}\n\nThis OTP will expire in 10 minutes.\n\nIf you did not request this, you can ignore this email.`,
+    });
+    console.log('[SMTP] Email sent successfully to:', to);
+    return true;
+  } catch (e) {
+    console.error('[SMTP] Email send failed:', e.message);
+    return false;
+  }
 }
 
 // Forgot password - request OTP
