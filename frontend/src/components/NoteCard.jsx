@@ -3,7 +3,7 @@ import { Badge } from './Badge';
 import { Button } from './Button';
 import { cn } from '../lib/cn';
 
-export function NoteCard({ note, onDownload, className }) {
+export function NoteCard({ note, onDownload, onDelete, className }) {
   return (
     <div className={cn('rounded-2xl bg-card shadow-soft border border-white/20 dark:border-white/10 p-4', className)}>
       <div className="flex items-start justify-between gap-3">
@@ -37,9 +37,15 @@ export function NoteCard({ note, onDownload, className }) {
         >
           View Details
         </Link>
-        <Button className="w-full" onClick={() => onDownload?.(note)}>
-          Download
-        </Button>
+        {onDelete ? (
+          <Button className="w-full" variant="destructive" onClick={() => onDelete?.(note)}>
+            Delete
+          </Button>
+        ) : (
+          <Button className="w-full" onClick={() => onDownload?.(note)}>
+            Download
+          </Button>
+        )}
       </div>
     </div>
   );

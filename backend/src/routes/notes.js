@@ -6,7 +6,7 @@ const { Readable } = require('stream');
 const { Note } = require('../models/Note');
 const { User } = require('../models/User');
 const { authRequired, authOptional } = require('../middleware/auth');
-const { uploadToCloudinary, isCloudinaryConfigured } = require('../lib/cloudinary');
+const { uploadToCloudinary, isCloudinaryConfigured, deleteFromCloudinary } = require('../lib/cloudinary');
 const { envBool, envString } = require('../lib/env');
 
 const router = express.Router();
@@ -197,6 +197,8 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
   }
 
   let fileUrl = '';
+  let cloudinaryPublicId = '';
+  let cloudinaryResourceType = '';
   if (isCloudinaryConfigured()) {
     const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
 
@@ -213,6 +215,8 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
         resourceType: String(req.file.mimetype || '').startsWith('image/') ? 'image' : 'raw',
       });
       fileUrl = uploaded?.url || '';
+      cloudinaryPublicId = uploaded?.publicId || '';
+      cloudinaryResourceType = uploaded?.resourceType || '';
 
       if (!fileUrl) {
         return res.status(502).json({ message: 'Failed to upload file to storage. Please try again.' });
@@ -236,6 +240,8 @@ router.post('/', authRequired, upload.single('file'), async (req, res) => {
     description: String(description || ''),
     filePath: req.file.filename,
     fileUrl,
+    cloudinaryPublicId,
+    cloudinaryResourceType,
     originalName: req.file.originalname,
     mimeType: req.file.mimetype,
     downloadCount: 0,
@@ -320,6 +326,63 @@ router.get('/:id/download', authRequired, async (req, res) => {
   ]);
 
   return res.download(absolutePath, note.originalName);
+});
+
+// Protected: uploader can delete their own uploaded note/file
+router.delete('/:id', authRequired, async (req, res) => {
+  const note = await Note.findById(req.params.id).select(
+    'uploadedBy filePath fileUrl cloudinaryPublicId cloudinaryResourceType'
+  );
+  if (!note) return res.status(404).json({ message: 'Note not found' });
+
+  if (String(note.uploadedBy) !== String(req.user.id)) {
+    return res.status(403).json({ message: 'You can only delete your own uploads' });
+  }
+
+  // Delete the backing file first (so we don't orphan DB state on storage errors)
+  if (note.cloudinaryPublicId) {
+    try {
+      const result = await deleteFromCloudinary(note.cloudinaryPublicId, {
+        resourceType: note.cloudinaryResourceType || 'raw',
+      });
+
+      const status = String(result?.result || '').toLowerCase();
+      if (status && status !== 'ok' && status !== 'not found') {
+        return res.status(502).json({ message: 'Failed to delete file from storage' });
+      }
+    } catch (e) {
+      const msg = String(e?.error?.message || e?.message || '');
+      console.error('[delete] cloudinary error:', msg || e);
+      return res.status(502).json({ message: msg ? `Failed to delete: ${msg}` : 'Failed to delete file from storage' });
+    }
+  } else {
+    // Local storage (or legacy records)
+    const absolutePath = path.join(uploadsDir, note.filePath);
+    try {
+      await fs.promises.unlink(absolutePath);
+    } catch (e) {
+      // If the file is missing (e.g. redeploy), still allow deleting the DB record.
+      if (e?.code !== 'ENOENT') {
+        console.error('[delete] local unlink error:', e);
+        return res.status(502).json({ message: 'Failed to delete file from server' });
+      }
+    }
+  }
+
+  await Promise.all([
+    Note.deleteOne({ _id: note._id }),
+    User.updateMany(
+      {},
+      {
+        $pull: {
+          bookmarks: note._id,
+          downloads: { note: note._id },
+        },
+      }
+    ),
+  ]);
+
+  return res.json({ deleted: true, id: String(note._id) });
 });
 
 router.use((err, req, res, next) => {

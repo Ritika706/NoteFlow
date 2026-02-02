@@ -82,6 +82,24 @@ export default function ProfilePage() {
     }
   }
 
+  async function handleDeleteUpload(note) {
+    const ok = window.confirm('Delete this upload? This cannot be undone.');
+    if (!ok) return;
+
+    try {
+      await api.delete(`/api/notes/${note._id}`);
+      toastSuccess('Upload deleted');
+      setProfile((prev) => {
+        if (!prev) return prev;
+        const nextUploads = (prev.uploads || []).filter((n) => String(n._id) !== String(note._id));
+        return { ...prev, uploads: nextUploads };
+      });
+    } catch (e) {
+      const msg = await getAxiosErrorMessage(e, 'Failed to delete upload');
+      toastError(msg);
+    }
+  }
+
   if (loading) return <div>Loading…</div>;
   if (error) return <div className="rounded-xl border border-destructive/20 bg-white/70 p-3 text-sm text-destructive">{error}</div>;
   if (!profile) return null;
@@ -114,7 +132,7 @@ export default function ProfilePage() {
             ) : (
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {uploads.map((n) => (
-                  <NoteCard key={n._id} note={n} onDownload={handleDownload} />
+                  <NoteCard key={n._id} note={n} onDownload={handleDownload} onDelete={handleDeleteUpload} />
                 ))}
               </div>
             )}

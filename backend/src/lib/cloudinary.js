@@ -43,4 +43,16 @@ async function uploadToCloudinary(
   };
 }
 
-module.exports = { isCloudinaryConfigured, uploadToCloudinary };
+async function deleteFromCloudinary(publicId, { resourceType = 'raw' } = {}) {
+  if (!isCloudinaryConfigured()) return null;
+  if (!publicId) return null;
+  initCloudinary();
+
+  // Returns: { result: 'ok' } or { result: 'not found' }
+  return cloudinary.uploader.destroy(publicId, {
+    resource_type: resourceType || 'raw',
+    type: 'upload',
+  });
+}
+
+module.exports = { isCloudinaryConfigured, uploadToCloudinary, deleteFromCloudinary };

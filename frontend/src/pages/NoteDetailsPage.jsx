@@ -149,7 +149,7 @@ export default function NoteDetailsPage() {
       } else {
         await el.requestFullscreen();
       }
-    } catch (e) {
+    } catch {
       // ignore
     }
   }
