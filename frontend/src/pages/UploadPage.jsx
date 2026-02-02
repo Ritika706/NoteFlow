@@ -40,6 +40,13 @@ export default function UploadPage() {
 
   function pickFile(f) {
     if (!f) return;
+
+    const MAX_FILE_BYTES = 10 * 1024 * 1024; // 10MB
+    if (f.size >= MAX_FILE_BYTES) {
+      toastError('File size too large. Please upload a file smaller than 10MB.');
+      return;
+    }
+
     if (!isAllowedFile(f)) {
       toastError('Only PDF, images, and Word docs allowed');
       return;

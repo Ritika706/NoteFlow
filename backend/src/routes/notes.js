@@ -43,7 +43,8 @@ const allowedMimeTypes = new Set([
 ]);
 
 const baseMulterOptions = {
-  limits: { fileSize: 15 * 1024 * 1024 },
+  // Cloudinary path enforces 10MB; keep multer aligned so oversized files don't throw 500s.
+  limits: { fileSize: 10 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (!file?.mimetype || !allowedMimeTypes.has(file.mimetype)) {
       return cb(new Error('Only PDF, images, and Word docs allowed'));
@@ -420,6 +421,14 @@ router.delete('/:id', authRequired, async (req, res) => {
 });
 
 router.use((err, req, res, next) => {
+  // Multer errors (e.g. file too large)
+  if (err && err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({ message: 'File size too large. Please upload a file smaller than 10MB.' });
+    }
+    return res.status(400).json({ message: 'Upload failed. Please check your file and try again.' });
+  }
+
   if (err?.message === 'Only PDF, images, and Word docs allowed') {
     return res.status(400).json({ message: err.message });
   }
