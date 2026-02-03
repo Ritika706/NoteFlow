@@ -289,7 +289,7 @@ router.post(
   return res.status(201).json({ note });
 });
 
-// Public preview - redirect to Cloudinary URL directly (files are public)
+// Public preview - stream file for PDF preview in iframe
 router.get('/:id/preview', async (req, res) => {
   try {
     const note = await Note.findById(req.params.id).select('fileUrl mimeType originalName').lean();
@@ -299,7 +299,20 @@ router.get('/:id/preview', async (req, res) => {
       return res.status(404).json({ message: 'Preview not available - no file URL stored' });
     }
 
-    // Files are uploaded as public, just redirect to the secure_url
+    // For PDFs, stream the file to work in iframe
+    const isPdf = String(note.mimeType || '').toLowerCase() === 'application/pdf';
+    if (isPdf) {
+      const upstream = await fetch(note.fileUrl);
+      if (!upstream.ok) {
+        return res.status(502).json({ message: 'Failed to fetch file from storage' });
+      }
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+      Readable.fromWeb(upstream.body).pipe(res);
+      return;
+    }
+
+    // For images and other files, redirect works fine
     return res.redirect(note.fileUrl);
   } catch (e) {
     console.error('Preview error:', e.message);
