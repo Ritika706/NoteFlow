@@ -54,6 +54,8 @@ async function uploadBufferToCloudinary(
 
   const baseName = String(originalName || '').trim();
   const nameNoExt = baseName ? path.parse(baseName).name : '';
+  // Sanitize filename - remove spaces and special characters for Cloudinary public_id
+  const sanitizedName = nameNoExt.replace(/[^a-zA-Z0-9_-]/g, '_').replace(/_+/g, '_');
 
   const options = {
     folder,
@@ -62,7 +64,7 @@ async function uploadBufferToCloudinary(
     access_mode: 'public',
     use_filename: true,
     unique_filename: true,
-    ...(nameNoExt ? { filename_override: nameNoExt } : {}),
+    ...(sanitizedName ? { filename_override: sanitizedName } : {}),
   };
 
   const res = await new Promise((resolve, reject) => {
